@@ -1,3 +1,13 @@
+---
+title: Git-Auto-Deploy
+emoji: 🧑‍🔬
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 <h1 align="center">
   <a href="https://github.com/SakanaAI/AI-Scientist/blob/main/docs/logo_2.png">
     <img src="docs/logo_2.png" width="215" /></a><br>
