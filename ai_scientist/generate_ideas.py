@@ -80,6 +80,8 @@ def generate_ideas(
         skip_generation=False,
         max_num_generations=20,
         num_reflections=5,
+        topic="",
+        research_questions="",
 ):
     if skip_generation:
         # Load existing ideas from file
@@ -117,13 +119,19 @@ def generate_ideas(
 
             msg_history = []
             print(f"Iteration 1/{num_reflections}")
+            prompt_to_send = idea_first_prompt.format(
+                task_description=prompt["task_description"],
+                code=code,
+                prev_ideas_string=prev_ideas_string,
+                num_reflections=num_reflections,
+            )
+            if topic:
+                prompt_to_send += f"\n\nFocus on the following research topic: {topic}"
+            if research_questions:
+                prompt_to_send += f"\n\nAddress the following research questions: {research_questions}"
+
             text, msg_history = get_response_from_llm(
-                idea_first_prompt.format(
-                    task_description=prompt["task_description"],
-                    code=code,
-                    prev_ideas_string=prev_ideas_string,
-                    num_reflections=num_reflections,
-                ),
+                prompt_to_send,
                 client=client,
                 model=model,
                 system_message=idea_system_prompt,
@@ -182,6 +190,8 @@ def generate_next_idea(
         prev_idea_archive=[],
         num_reflections=5,
         max_attempts=10,
+        topic="",
+        research_questions="",
 ):
     idea_archive = prev_idea_archive
     original_archive_size = len(idea_archive)
@@ -211,18 +221,25 @@ def generate_next_idea(
 
                 msg_history = []
                 print(f"Iteration 1/{num_reflections}")
-                text, msg_history = get_response_from_llm(
-                    idea_first_prompt.format(
-                        task_description=prompt["task_description"],
-                        code=code,
-                        prev_ideas_string=prev_ideas_string,
-                        num_reflections=num_reflections,
-                    )
-                    + """
+                prompt_to_send = idea_first_prompt.format(
+                    task_description=prompt["task_description"],
+                    code=code,
+                    prev_ideas_string=prev_ideas_string,
+                    num_reflections=num_reflections,
+                )
+                if topic:
+                    prompt_to_send += f"\n\nFocus on the following research topic: {topic}"
+                if research_questions:
+                    prompt_to_send += f"\n\nAddress the following research questions: {research_questions}"
+
+                prompt_to_send += """
 Completed ideas have an additional "Score" field which indicates the assessment by an expert ML reviewer.
 This is on a standard 1-10 ML conference scale.
 Scores of 0 indicate the idea failed either during experimentation, writeup or reviewing.
-""",
+"""
+
+                text, msg_history = get_response_from_llm(
+                    prompt_to_send,
                     client=client,
                     model=model,
                     system_message=idea_system_prompt,

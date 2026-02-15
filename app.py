@@ -32,6 +32,8 @@ class RunRequest(BaseModel):
     engine: Optional[str] = "semanticscholar"
     s2_api_key: Optional[str] = None
     openalex_mail: Optional[str] = None
+    topic: Optional[str] = ""
+    research_questions: Optional[str] = ""
 
 @app.get("/health")
 def health():
@@ -39,13 +41,13 @@ def health():
 
 @app.post("/run")
 def run_api(req: RunRequest):
-    return {"message": start_scientist(req.model, req.experiment, req.num_ideas, req.openai_key, req.anthropic_key, req.blablador_key, req.engine, req.s2_api_key, req.openalex_mail)}
+    return {"message": start_scientist(req.model, req.experiment, req.num_ideas, req.openai_key, req.anthropic_key, req.blablador_key, req.engine, req.s2_api_key, req.openalex_mail, req.topic, req.research_questions)}
 
 @app.get("/logs")
 def get_logs():
     return {"logs": process_output}
 
-def run_scientist_cmd(model, experiment, num_ideas, openai_key, anthropic_key, blablador_key, engine, s2_api_key, openalex_mail):
+def run_scientist_cmd(model, experiment, num_ideas, openai_key, anthropic_key, blablador_key, engine, s2_api_key, openalex_mail, topic, research_questions):
     global current_process, process_output
     process_output = "--- Starting AI Scientist ---\n"
 
@@ -68,6 +70,10 @@ def run_scientist_cmd(model, experiment, num_ideas, openai_key, anthropic_key, b
         "--num-ideas", str(int(num_ideas)),
         "--engine", engine
     ]
+    if topic:
+        cmd.extend(["--topic", topic])
+    if research_questions:
+        cmd.extend(["--research-questions", research_questions])
 
     process_output += f"Running command: {' '.join(cmd)}\n\n"
 
@@ -93,12 +99,12 @@ def run_scientist_cmd(model, experiment, num_ideas, openai_key, anthropic_key, b
     finally:
         current_process = None
 
-def start_scientist(model, experiment, num_ideas, openai_key, anthropic_key, blablador_key, engine="semanticscholar", s2_api_key=None, openalex_mail=None):
+def start_scientist(model, experiment, num_ideas, openai_key, anthropic_key, blablador_key, engine="semanticscholar", s2_api_key=None, openalex_mail=None, topic="", research_questions=""):
     global current_process
     if current_process is not None:
         return "A process is already running."
 
-    thread = threading.Thread(target=run_scientist_cmd, args=(model, experiment, num_ideas, openai_key, anthropic_key, blablador_key, engine, s2_api_key, openalex_mail))
+    thread = threading.Thread(target=run_scientist_cmd, args=(model, experiment, num_ideas, openai_key, anthropic_key, blablador_key, engine, s2_api_key, openalex_mail, topic, research_questions))
     thread.start()
     return "Process started."
 
@@ -159,6 +165,9 @@ with gr.Blocks(title="The AI Scientist") as demo:
                 value="semanticscholar"
             )
 
+            topic_input = gr.Textbox(label="Research Topic (Optional)", placeholder="e.g. Efficient Attention Mechanisms")
+            rq_input = gr.Textbox(label="Research Questions (Optional)", placeholder="e.g. Can we reduce the complexity to O(N log N)?", lines=3)
+
         with gr.Column():
             gr.Markdown("### 🔑 API Keys")
             openai_key_input = gr.Textbox(label="OpenAI API Key (Required for GPT models)", type="password")
@@ -179,7 +188,7 @@ with gr.Blocks(title="The AI Scientist") as demo:
         refresh_results_btn = gr.Button("Refresh Results List")
 
     # Event handlers
-    run_btn.click(start_scientist, inputs=[model_input, exp_input, num_ideas_input, openai_key_input, anthropic_key_input, blablador_key_input, engine_input, s2_api_key_input, openalex_mail_input], outputs=output_text)
+    run_btn.click(start_scientist, inputs=[model_input, exp_input, num_ideas_input, openai_key_input, anthropic_key_input, blablador_key_input, engine_input, s2_api_key_input, openalex_mail_input, topic_input, rq_input], outputs=output_text)
     stop_btn.click(stop_process, None, output_text)
     refresh_btn.click(get_output, None, output_text)
     refresh_results_btn.click(list_results, None, results_list)

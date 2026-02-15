@@ -89,6 +89,18 @@ def parse_arguments():
         choices=["semanticscholar", "openalex"],
         help="Scholar engine to use.",
     )
+    parser.add_argument(
+        "--topic",
+        type=str,
+        default="",
+        help="Research topic to focus on.",
+    )
+    parser.add_argument(
+        "--research-questions",
+        type=str,
+        default="",
+        help="Research questions to address.",
+    )
     return parser.parse_args()
 
 
@@ -359,6 +371,8 @@ if __name__ == "__main__":
         skip_generation=args.skip_idea_generation,
         max_num_generations=args.num_ideas,
         num_reflections=NUM_REFLECTIONS,
+        topic=args.topic,
+        research_questions=args.research_questions,
     )
     if not args.skip_novelty_check:
         ideas = check_idea_novelty(
