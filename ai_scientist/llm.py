@@ -59,6 +59,9 @@ AVAILABLE_LLMS = [
     "gemini-2.0-flash-thinking-exp-01-21",
     "gemini-2.5-pro-preview-03-25",
     "gemini-2.5-pro-exp-03-25",
+    # Helmholtz-Blablador models
+    "alias-large",
+    "alias-fast",
 ]
 
 
@@ -77,7 +80,7 @@ def get_batch_responses_from_llm(
     if msg_history is None:
         msg_history = []
 
-    if 'gpt' in model:
+    if 'gpt' in model or model in ["alias-large", "alias-fast"]:
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
         response = client.chat.completions.create(
             model=model,
@@ -183,7 +186,7 @@ def get_response_from_llm(
                 ],
             }
         ]
-    elif 'gpt' in model:
+    elif 'gpt' in model or model in ["alias-large", "alias-fast"]:
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
         response = client.chat.completions.create(
             model=model,
@@ -346,6 +349,12 @@ def create_client(model):
         return openai.OpenAI(
             api_key=os.environ["GEMINI_API_KEY"],
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        ), model
+    elif model in ["alias-large", "alias-fast"]:
+        print(f"Using Helmholtz-Blablador with model {model}.")
+        return openai.OpenAI(
+            api_key=os.environ["BLABLADOR_API_KEY"],
+            base_url="https://api.helmholtz-blablador.fz-juelich.de/v1"
         ), model
     else:
         raise ValueError(f"Model {model} not supported.")

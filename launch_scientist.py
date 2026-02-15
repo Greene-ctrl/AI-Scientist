@@ -48,7 +48,7 @@ def parse_arguments():
     parser.add_argument(
         "--model",
         type=str,
-        default="claude-3-5-sonnet-20240620",
+        default="alias-large",
         choices=AVAILABLE_LLMS,
         help="Model to use for AI Scientist.",
     )
@@ -204,6 +204,12 @@ def do_idea(
             main_model = Model("deepseek/deepseek-reasoner")
         elif model == "llama3.1-405b":
             main_model = Model("openrouter/meta-llama/llama-3.1-405b-instruct")
+        elif model in ["alias-large", "alias-fast"]:
+            main_model = Model(
+                "openai/alias-fast",
+                base_url="https://api.helmholtz-blablador.fz-juelich.de/v1",
+                api_key=os.environ["BLABLADOR_API_KEY"]
+            )
         else:
             main_model = Model(model)
         coder = Coder.create(
@@ -240,6 +246,12 @@ def do_idea(
                 main_model = Model("deepseek/deepseek-reasoner")
             elif model == "llama3.1-405b":
                 main_model = Model("openrouter/meta-llama/llama-3.1-405b-instruct")
+            elif model in ["alias-large", "alias-fast"]:
+                main_model = Model(
+                    "openai/alias-fast",
+                    base_url="https://api.helmholtz-blablador.fz-juelich.de/v1",
+                    api_key=os.environ["BLABLADOR_API_KEY"]
+                )
             else:
                 main_model = Model(model)
             coder = Coder.create(
@@ -267,8 +279,8 @@ def do_idea(
                 paper_text = load_paper(f"{folder_name}/{idea['Name']}.pdf")
                 review = perform_review(
                     paper_text,
-                    model="gpt-4o-2024-05-13",
-                    client=openai.OpenAI(),
+                    model=model,
+                    client=client,
                     num_reflections=5,
                     num_fs_examples=1,
                     num_reviews_ensemble=5,
@@ -293,8 +305,8 @@ def do_idea(
                 paper_text = load_paper(f"{folder_name}/{idea['Name']}_improved.pdf")
                 review = perform_review(
                     paper_text,
-                    model="gpt-4o-2024-05-13",
-                    client=openai.OpenAI(),
+                    model=model,
+                    client=client,
                     num_reflections=5,
                     num_fs_examples=1,
                     num_reviews_ensemble=5,
