@@ -49,7 +49,6 @@ def parse_arguments():
         "--model",
         type=str,
         default="alias-large",
-        choices=AVAILABLE_LLMS,
         help="Model to use for AI Scientist.",
     )
     parser.add_argument(

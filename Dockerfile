@@ -29,6 +29,7 @@ ENV PATH="/home/user/.local/bin:$PATH"
 WORKDIR /home/user/app
 
 # Copy the rest of the application
+# Force rebuild - 2026-02-15
 COPY --chown=user . .
 
 # Expose the port

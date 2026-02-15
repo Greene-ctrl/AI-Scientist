@@ -3,6 +3,8 @@ import os
 import os.path as osp
 import time
 from typing import List, Dict, Union
+import sqlite3
+import random
 
 import backoff
 import requests
@@ -10,6 +12,57 @@ import requests
 from ai_scientist.llm import get_response_from_llm, extract_json_between_markers, create_client, AVAILABLE_LLMS
 
 S2_API_KEY = os.getenv("S2_API_KEY")
+CACHE_PATH = "search_cache.db"
+
+
+def get_cache_conn():
+    conn = sqlite3.connect(CACHE_PATH)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS search_cache (query TEXT, engine TEXT, results TEXT, PRIMARY KEY (query, engine))"
+    )
+    return conn
+
+
+def get_cached_search(query, engine):
+    try:
+        with get_cache_conn() as conn:
+            cursor = conn.execute(
+                "SELECT results FROM search_cache WHERE query = ? AND engine = ?",
+                (query, engine),
+            )
+            row = cursor.fetchone()
+            if row:
+                return json.loads(row[0])
+    except Exception as e:
+        print(f"Cache read error: {e}")
+    return None
+
+
+def set_cached_search(query, engine, results):
+    try:
+        with get_cache_conn() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO search_cache (query, engine, results) VALUES (?, ?, ?)",
+                (query, engine, json.dumps(results)),
+            )
+    except Exception as e:
+        print(f"Cache write error: {e}")
+
+
+def semantic_scholar_jitter(value):
+    return value + random.uniform(0, value)
+
+
+def semantic_scholar_wait_gen():
+    yield 0  # backoff skips the first value
+    yield 1
+    yield 4
+    yield 10
+    curr = 20
+    while True:
+        yield curr
+        curr *= 2
+
 
 idea_first_prompt = """{task_description}
 <experiment.py>
@@ -297,11 +350,22 @@ def on_backoff(details):
 
 
 @backoff.on_exception(
-    backoff.expo, requests.exceptions.HTTPError, on_backoff=on_backoff
+    semantic_scholar_wait_gen,
+    requests.exceptions.HTTPError,
+    on_backoff=on_backoff,
+    jitter=semantic_scholar_jitter,
 )
-def search_for_papers(query, result_limit=10, engine="semanticscholar") -> Union[None, List[Dict]]:
+def search_for_papers(
+    query, result_limit=10, engine="semanticscholar"
+) -> Union[None, List[Dict]]:
     if not query:
         return None
+
+    cached = get_cached_search(query, engine)
+    if cached is not None:
+        print(f"Using cached search results for query: {query}")
+        return cached
+
     if engine == "semanticscholar":
         rsp = requests.get(
             "https://api.semanticscholar.org/graph/v1/paper/search",
@@ -318,12 +382,13 @@ def search_for_papers(query, result_limit=10, engine="semanticscholar") -> Union
         )  # Print the first 500 characters of the response content
         rsp.raise_for_status()
         results = rsp.json()
-        total = results["total"]
+        total = results.get("total", 0)
         time.sleep(1.0)
         if not total:
             return None
 
-        papers = results["data"]
+        papers = results.get("data")
+        set_cached_search(query, engine, papers)
         return papers
     elif engine == "openalex":
         import pyalex
@@ -364,6 +429,7 @@ def search_for_papers(query, result_limit=10, engine="semanticscholar") -> Union
 
         works: List[Dict] = Works().search(query).get(per_page=result_limit)
         papers: List[Dict[str, str]] = [extract_info_from_work(work) for work in works]
+        set_cached_search(query, engine, papers)
         return papers
     else:
         raise NotImplementedError(f"{engine=} not supported!")
