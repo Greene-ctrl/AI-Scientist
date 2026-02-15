@@ -3,6 +3,8 @@ import os
 import os.path as osp
 import time
 from typing import List, Dict, Union
+import sqlite3
+import random
 
 import backoff
 import requests
@@ -10,6 +12,57 @@ import requests
 from ai_scientist.llm import get_response_from_llm, extract_json_between_markers, create_client, AVAILABLE_LLMS
 
 S2_API_KEY = os.getenv("S2_API_KEY")
+CACHE_PATH = "search_cache.db"
+
+
+def get_cache_conn():
+    conn = sqlite3.connect(CACHE_PATH)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS search_cache (query TEXT, engine TEXT, results TEXT, PRIMARY KEY (query, engine))"
+    )
+    return conn
+
+
+def get_cached_search(query, engine):
+    try:
+        with get_cache_conn() as conn:
+            cursor = conn.execute(
+                "SELECT results FROM search_cache WHERE query = ? AND engine = ?",
+                (query, engine),
+            )
+            row = cursor.fetchone()
+            if row:
+                return json.loads(row[0])
+    except Exception as e:
+        print(f"Cache read error: {e}")
+    return None
+
+
+def set_cached_search(query, engine, results):
+    try:
+        with get_cache_conn() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO search_cache (query, engine, results) VALUES (?, ?, ?)",
+                (query, engine, json.dumps(results)),
+            )
+    except Exception as e:
+        print(f"Cache write error: {e}")
+
+
+def semantic_scholar_jitter(value):
+    return value + random.uniform(0, value)
+
+
+def semantic_scholar_wait_gen():
+    yield 0  # backoff skips the first value
+    yield 1
+    yield 4
+    yield 10
+    curr = 20
+    while True:
+        yield curr
+        curr *= 2
+
 
 idea_first_prompt = """{task_description}
 <experiment.py>
@@ -80,6 +133,8 @@ def generate_ideas(
         skip_generation=False,
         max_num_generations=20,
         num_reflections=5,
+        topic="",
+        research_questions="",
 ):
     if skip_generation:
         # Load existing ideas from file
@@ -117,13 +172,19 @@ def generate_ideas(
 
             msg_history = []
             print(f"Iteration 1/{num_reflections}")
+            prompt_to_send = idea_first_prompt.format(
+                task_description=prompt["task_description"],
+                code=code,
+                prev_ideas_string=prev_ideas_string,
+                num_reflections=num_reflections,
+            )
+            if topic:
+                prompt_to_send += f"\n\nFocus on the following research topic: {topic}"
+            if research_questions:
+                prompt_to_send += f"\n\nAddress the following research questions: {research_questions}"
+
             text, msg_history = get_response_from_llm(
-                idea_first_prompt.format(
-                    task_description=prompt["task_description"],
-                    code=code,
-                    prev_ideas_string=prev_ideas_string,
-                    num_reflections=num_reflections,
-                ),
+                prompt_to_send,
                 client=client,
                 model=model,
                 system_message=idea_system_prompt,
@@ -182,6 +243,8 @@ def generate_next_idea(
         prev_idea_archive=[],
         num_reflections=5,
         max_attempts=10,
+        topic="",
+        research_questions="",
 ):
     idea_archive = prev_idea_archive
     original_archive_size = len(idea_archive)
@@ -211,18 +274,25 @@ def generate_next_idea(
 
                 msg_history = []
                 print(f"Iteration 1/{num_reflections}")
-                text, msg_history = get_response_from_llm(
-                    idea_first_prompt.format(
-                        task_description=prompt["task_description"],
-                        code=code,
-                        prev_ideas_string=prev_ideas_string,
-                        num_reflections=num_reflections,
-                    )
-                    + """
+                prompt_to_send = idea_first_prompt.format(
+                    task_description=prompt["task_description"],
+                    code=code,
+                    prev_ideas_string=prev_ideas_string,
+                    num_reflections=num_reflections,
+                )
+                if topic:
+                    prompt_to_send += f"\n\nFocus on the following research topic: {topic}"
+                if research_questions:
+                    prompt_to_send += f"\n\nAddress the following research questions: {research_questions}"
+
+                prompt_to_send += """
 Completed ideas have an additional "Score" field which indicates the assessment by an expert ML reviewer.
 This is on a standard 1-10 ML conference scale.
 Scores of 0 indicate the idea failed either during experimentation, writeup or reviewing.
-""",
+"""
+
+                text, msg_history = get_response_from_llm(
+                    prompt_to_send,
                     client=client,
                     model=model,
                     system_message=idea_system_prompt,
@@ -280,11 +350,22 @@ def on_backoff(details):
 
 
 @backoff.on_exception(
-    backoff.expo, requests.exceptions.HTTPError, on_backoff=on_backoff
+    semantic_scholar_wait_gen,
+    requests.exceptions.HTTPError,
+    on_backoff=on_backoff,
+    jitter=semantic_scholar_jitter,
 )
-def search_for_papers(query, result_limit=10, engine="semanticscholar") -> Union[None, List[Dict]]:
+def search_for_papers(
+    query, result_limit=10, engine="semanticscholar"
+) -> Union[None, List[Dict]]:
     if not query:
         return None
+
+    cached = get_cached_search(query, engine)
+    if cached is not None:
+        print(f"Using cached search results for query: {query}")
+        return cached
+
     if engine == "semanticscholar":
         rsp = requests.get(
             "https://api.semanticscholar.org/graph/v1/paper/search",
@@ -301,12 +382,13 @@ def search_for_papers(query, result_limit=10, engine="semanticscholar") -> Union
         )  # Print the first 500 characters of the response content
         rsp.raise_for_status()
         results = rsp.json()
-        total = results["total"]
+        total = results.get("total", 0)
         time.sleep(1.0)
         if not total:
             return None
 
-        papers = results["data"]
+        papers = results.get("data")
+        set_cached_search(query, engine, papers)
         return papers
     elif engine == "openalex":
         import pyalex
@@ -347,6 +429,7 @@ def search_for_papers(query, result_limit=10, engine="semanticscholar") -> Union
 
         works: List[Dict] = Works().search(query).get(per_page=result_limit)
         papers: List[Dict[str, str]] = [extract_info_from_work(work) for work in works]
+        set_cached_search(query, engine, papers)
         return papers
     else:
         raise NotImplementedError(f"{engine=} not supported!")
