@@ -8,6 +8,7 @@
 - **Deep-Thinking Orchestrator**: Uses iterative planning and reasoning (Planner -> Retriever -> Analyzer).
 - **Hypothesis Generator**: Generates "Improvement Hypotheses" and validates them against the code context.
 - **Hugging Face Hub**: Searches for replacement components.
+- **Web Researcher**: Uses specialized MCP servers (harvesthealth/github-mcp-server) and Gradio clients to search GitHub and Hugging Face Spaces for community-driven solutions.
 
 ### Proposed FASTAPI Setup
 - **App structure**:

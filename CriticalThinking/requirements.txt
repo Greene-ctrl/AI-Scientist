@@ -8,3 +8,5 @@ huggingface_hub
 python-multipart
 pytest
 httpx
+gradio_client
+requests

@@ -1,10 +1,18 @@
 from fastapi.testclient import TestClient
 from app.main import app
 import time
+from unittest.mock import patch, MagicMock
 
 client = TestClient(app)
 
-def test_analyze_flow():
+@patch("app.api.router.WebResearcher")
+def test_analyze_flow(mock_web_researcher_class):
+    # Mock WebResearcher
+    mock_web_researcher = MagicMock()
+    mock_web_researcher_class.return_value = mock_web_researcher
+    mock_web_researcher.research_github.return_value = "Mocked GitHub results"
+    mock_web_researcher.research_hf_spaces.return_value = "Mocked HF Spaces results"
+
     # Submit analysis
     response = client.post("/analyze", json={"repo_url": "local://.", "project_description": "Test Project"})
     assert response.status_code == 200
@@ -21,4 +29,6 @@ def test_analyze_flow():
     if data['status'] == 'failed':
         print(f"Error: {data.get('error')}")
 
-    assert data["status"] != "failed"
+    assert data["status"] == "completed"
+    assert "github_research" in data["report"]["improvements"][0]
+    assert "hf_spaces_research" in data["report"]["improvements"][0]

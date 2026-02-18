@@ -7,6 +7,7 @@ from app.services.indexer import CodeIndexer
 from app.services.agent_orchestrator import AgentOrchestrator
 from app.services.improvement_agent import ImprovementAgent
 from app.services.hf_matcher import HFMatcher
+from app.services.web_researcher import WebResearcher
 
 router = APIRouter()
 
@@ -29,6 +30,7 @@ async def run_analysis_task(task_id: str, repo_url: str, project_description: st
         orchestrator = AgentOrchestrator(indexer=indexer, openai_api_key=api_key)
         improver = ImprovementAgent(openai_api_key=api_key)
         matcher = HFMatcher()
+        web_researcher = WebResearcher()
 
         # 1. Index
         indexer.index_repository(repo_url)
@@ -41,12 +43,17 @@ async def run_analysis_task(task_id: str, repo_url: str, project_description: st
         improvements_results = improver.generate_improvements(weaknesses)
         improvements = improvements_results.get("improvements", [])
 
-        # 4. Replacement matching
+        # 4. Replacement matching and Web Research
         for imp in improvements:
             query = imp.get("replacement_search_query")
             if query:
+                # Direct HF search
                 replacements = matcher.find_replacements(query)
                 imp["suggested_replacements"] = replacements
+
+                # Web research for GitHub and HF Spaces
+                imp["github_research"] = web_researcher.research_github(query)
+                imp["hf_spaces_research"] = web_researcher.research_hf_spaces(query)
 
         # 5. Store report
         tasks[task_id]["status"] = "completed"
