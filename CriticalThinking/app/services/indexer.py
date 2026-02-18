@@ -28,13 +28,13 @@ class CodeIndexer:
         temp_dir = tempfile.mkdtemp()
         try:
             print(f"Cloning {repo_url} into {temp_dir}...")
-            if repo_url.startswith("local://"):
-                local_path = repo_url.replace("local://", "")
-                shutil.copytree(local_path, temp_dir, dirs_exist_ok=True)
-            else:
-                result = subprocess.run(["git", "clone", "--depth", "1", repo_url, temp_dir], capture_output=True, text=True)
-                if result.returncode != 0:
-                    raise Exception(f"Git clone failed: {result.stderr}")
+            # Only allow HTTP/HTTPS URLs for security
+            if not repo_url.startswith(("http://", "https://")):
+                raise Exception("Only HTTP and HTTPS repository URLs are allowed.")
+
+            result = subprocess.run(["git", "clone", "--depth", "1", repo_url, temp_dir], capture_output=True, text=True)
+            if result.returncode != 0:
+                raise Exception(f"Git clone failed: {result.stderr}")
 
             self._index_directory(temp_dir)
         finally:

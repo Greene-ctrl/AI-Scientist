@@ -21,7 +21,7 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     task_id: str
 
-async def run_analysis_task(task_id: str, repo_url: str, project_description: str):
+def run_analysis_task(task_id: str, repo_url: Optional[str], project_description: str):
     tasks[task_id]["status"] = "processing"
     try:
         api_key = os.getenv("OPENAI_API_KEY", "dummy")

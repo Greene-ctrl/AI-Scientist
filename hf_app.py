@@ -6,10 +6,40 @@ from CriticalThinking.app.main import app as fastapi_app
 # We can just mount it or use it as the main app.
 # Here we will mount Gradio onto the existing FastAPI app.
 
+import httpx
+
 def analyze_interface(repo_url, project_description):
-    # This is a placeholder for the Gradio UI to interact with the API
-    # In a real scenario, we might want to use the background task or just call the service.
-    return f"Analysis request for {repo_url} received. Please use the API endpoints to monitor progress."
+    if not repo_url and not project_description:
+        return "Please provide at least a project description."
+
+    try:
+        # Call the local FastAPI endpoint
+        with httpx.Client() as client:
+            response = client.post(
+                "http://localhost:7860/analyze",
+                json={
+                    "repo_url": repo_url if repo_url else None,
+                    "project_description": project_description
+                },
+                timeout=10.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            task_id = data.get("task_id")
+            return f"Analysis started! Task ID: {task_id}\n\nYou can check the report at: /report/{task_id}"
+    except Exception as e:
+        return f"Error starting analysis: {str(e)}"
+
+def get_report_interface(task_id):
+    if not task_id:
+        return "Please provide a Task ID."
+    try:
+        with httpx.Client() as client:
+            response = client.get(f"http://localhost:7860/report/{task_id}")
+            response.raise_for_status()
+            return response.json()
+    except Exception as e:
+        return f"Error fetching report: {str(e)}"
 
 with gr.Blocks(title="Critical Code Agent") as demo:
     gr.Markdown("# 🦀 Critical Code Agent")
@@ -23,6 +53,14 @@ with gr.Blocks(title="Critical Code Agent") as demo:
     output = gr.Textbox(label="Status")
 
     analyze_btn.click(analyze_interface, inputs=[repo_url, project_desc], outputs=output)
+
+    gr.Markdown("### Check Report Status")
+    with gr.Row():
+        task_id_input = gr.Textbox(label="Task ID")
+        report_btn = gr.Button("Get Report")
+
+    report_output = gr.JSON(label="Analysis Report")
+    report_btn.click(get_report_interface, inputs=[task_id_input], outputs=report_output)
 
     gr.Markdown("### API Endpoints")
     gr.Markdown("- `POST /analyze`: Submit a repository for analysis")

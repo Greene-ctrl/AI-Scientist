@@ -5,8 +5,13 @@ from unittest.mock import patch, MagicMock
 
 client = TestClient(app)
 
+@patch("app.api.router.CodeIndexer")
 @patch("app.api.router.WebResearcher")
-def test_analyze_flow(mock_web_researcher_class):
+def test_analyze_flow(mock_web_researcher_class, mock_indexer_class):
+    # Mock CodeIndexer
+    mock_indexer = MagicMock()
+    mock_indexer_class.return_value = mock_indexer
+
     # Mock WebResearcher
     mock_web_researcher = MagicMock()
     mock_web_researcher_class.return_value = mock_web_researcher
@@ -14,7 +19,7 @@ def test_analyze_flow(mock_web_researcher_class):
     mock_web_researcher.research_hf_spaces.return_value = "Mocked HF Spaces results"
 
     # Submit analysis
-    response = client.post("/analyze", json={"repo_url": "local://.", "project_description": "Test Project"})
+    response = client.post("/analyze", json={"repo_url": "https://github.com/dummy/repo", "project_description": "Test Project"})
     assert response.status_code == 200
     task_id = response.json()["task_id"]
     assert task_id
