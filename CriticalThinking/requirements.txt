@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+openai
+pydantic
+pydantic-settings
+qdrant-client
+huggingface_hub
+python-multipart
+pytest
+httpx
+gradio_client
+requests

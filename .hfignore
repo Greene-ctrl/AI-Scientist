@@ -1,0 +1,16 @@
+ai_scientist/
+data/
+docs/
+example_papers/
+review_ai_scientist/
+review_iclr_bench/
+templates/
+.git/
+NPEET/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
