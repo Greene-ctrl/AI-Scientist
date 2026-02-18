@@ -37,7 +37,7 @@ def run_analysis_task(task_id: str, repo_url: Optional[str], project_description
             indexer.index_repository(repo_url)
 
         # 2. Analyze
-        analysis_results = orchestrator.run_analysis(project_description)
+        analysis_results = orchestrator.run_analysis(project_description, has_code=bool(repo_url))
         weaknesses = analysis_results.get("weaknesses", [])
 
         # 3. Improvements

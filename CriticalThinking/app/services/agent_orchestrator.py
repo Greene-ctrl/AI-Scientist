@@ -50,25 +50,33 @@ class BaseAgent:
         return "Mocked response"
 
 class Planner(BaseAgent):
-    def plan(self, project_overview: str) -> Dict[str, Any]:
-        system_prompt = """You are an expert query planner for a deep-thinking codebase analysis system.
+    def plan(self, project_overview: str, has_code: bool = True) -> Dict[str, Any]:
+        if has_code:
+            system_prompt = """You are an expert query planner for a deep-thinking codebase analysis system.
 Your task is to decompose complex codebase investigations into sequential execution plans.
 Guidelines:
 - Create 2-5 steps that build on each other.
 - Each step should have a clear sub-question targeting a specific architectural or logic component.
 - Specify tool_type: doc_search (for code retrieval)."""
+        else:
+            system_prompt = """You are an expert architect planning the design of a new modular software system.
+Your task is to decompose the project description into sequential design steps.
+Guidelines:
+- Create 2-5 steps focusing on component decomposition and external service discovery.
+- Each step should target a specific functional module or API integration.
+- Specify tool_type: doc_search (for documentation or concept search)."""
         user_prompt = f"Decompose the following project overview into a sequential execution plan:\n\nProject Overview: {project_overview}\n\nRespond with valid JSON in this EXACT format:\n{{\n  'steps': [\n    {{\n      'index': 0,\n      'sub_question': 'What specific architectural component needs analysis?',\n      'tool_type': 'doc_search',\n      'expected_outputs': ['finding 1', 'finding 2']\n    }}\n  ],\n  'reasoning': 'Explain why this plan will effectively find weaknesses.'\n}}"
         return self._get_response(system_prompt, user_prompt, response_format={"type": "json_object"})
 
 class WeaknessAnalyzer(BaseAgent):
-    def analyze(self, code_context: str) -> Dict[str, Any]:
-        system_prompt = """You are an AI senior engineer reviewing a project for critical weaknesses.
+    def analyze(self, context: str) -> Dict[str, Any]:
+        system_prompt = """You are an AI senior engineer and architect reviewing a project or requirements for critical weaknesses.
 Be critical and cautious. Focus on:
-- Architectural flaws (circular dependencies, lack of modularity).
-- Security risks.
-- Performance bottlenecks.
+- Architectural flaws (circular dependencies, lack of modularity, tight coupling).
+- Missing high-value external integrations.
+- Potential performance bottlenecks.
 - Redundant custom logic that could be replaced by standard libraries or models."""
-        user_prompt = f"Analyze the following code snippets for weaknesses:\n\n{code_context}\n\nRespond in JSON format with fields: 'summary', 'weaknesses' (list of strings), 'severity' (high/medium/low)."
+        user_prompt = f"Analyze the following context (code or requirements) for weaknesses or missing components:\n\n{context}\n\nRespond in JSON format with fields: 'summary', 'weaknesses' (list of strings), 'severity' (high/medium/low)."
         return self._get_response(system_prompt, user_prompt, response_format={"type": "json_object"})
 
 class AgentOrchestrator:
@@ -77,9 +85,9 @@ class AgentOrchestrator:
         self.planner = Planner(openai_api_key=openai_api_key)
         self.analyzer = WeaknessAnalyzer(openai_api_key=openai_api_key)
 
-    def run_analysis(self, project_overview: str) -> Dict[str, Any]:
+    def run_analysis(self, project_overview: str, has_code: bool = True) -> Dict[str, Any]:
         # 1. Plan
-        plan = self.planner.plan(project_overview)
+        plan = self.planner.plan(project_overview, has_code=has_code)
 
         all_weaknesses = []
         # 2. Execute steps
